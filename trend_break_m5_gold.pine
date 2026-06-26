@@ -12,7 +12,7 @@
 //    - Une fois la tendance confirmée, une SEULE cassure opposée suffit à
 //      provoquer un CHANGEMENT de tendance (CHoCH) : la tendance bascule.
 // =============================================================================
-indicator(title = "Trend Break M5 GOLD", shorttitle = "TB M5 GOLD", overlay = true)
+indicator(title = "Trend Break M5 GOLD", shorttitle = "TB M5 GOLD", overlay = true, max_lines_count = 500)
 
 // =============================================================================
 //  PARAMÈTRES (inputs)
@@ -25,6 +25,7 @@ confBos   = input.int(3, title = "BoS consécutifs pour confirmer", minval = 2, 
 grpVisu  = "Affichage"
 showBos   = input.bool(true, title = "Afficher les BoS",            group = grpVisu)
 showTrend = input.bool(true, title = "Afficher confirmations / changements", group = grpVisu)
+showLines = input.bool(true, title = "Tracer les lignes de structure (BoS)", group = grpVisu, tooltip = "Trace une ligne horizontale depuis chaque swing ; elle s'arrête là où le prix vient la toucher.")
 bullCol  = input.color(color.new(color.green, 0), title = "Couleur haussière", group = grpVisu)
 bearCol  = input.color(color.new(color.red, 0),   title = "Couleur baissière", group = grpVisu)
 
@@ -42,10 +43,37 @@ pl = ta.pivotlow(low,  swingLen, swingLen)
 var float lastHigh = na
 var float lastLow  = na
 
+// Lignes de structure : une ligne part du swing et est prolongée vers la droite
+// tant que le prix ne l'a pas touchée ; une fois touchée, elle est figée.
+var line hiLine    = na
+var bool hiTouched = false
+var line loLine    = na
+var bool loTouched = false
+
 if not na(ph)
     lastHigh := ph
+    if showLines
+        hiLine    := line.new(bar_index - swingLen, ph, bar_index, ph, color = color.new(bearCol, 20), width = 1, style = line.style_dashed)
+        hiTouched := false
 if not na(pl)
     lastLow := pl
+    if showLines
+        loLine    := line.new(bar_index - swingLen, pl, bar_index, pl, color = color.new(bullCol, 20), width = 1, style = line.style_dashed)
+        loTouched := false
+
+// Prolongation jusqu'au contact, puis figée et passée en trait plein.
+if not na(hiLine) and not hiTouched
+    line.set_x2(hiLine, bar_index)
+    if high >= line.get_y1(hiLine)
+        line.set_style(hiLine, line.style_solid)
+        line.set_color(hiLine, color.new(bullCol, 0))
+        hiTouched := true
+if not na(loLine) and not loTouched
+    line.set_x2(loLine, bar_index)
+    if low <= line.get_y1(loLine)
+        line.set_style(loLine, line.style_solid)
+        line.set_color(loLine, color.new(bearCol, 0))
+        loTouched := true
 
 // =============================================================================
 //  CASSURE DE STRUCTURE (BoS)
