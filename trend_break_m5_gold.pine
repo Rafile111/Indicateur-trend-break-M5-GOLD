@@ -3,8 +3,14 @@
 //  Trend Break - M5 GOLD (XAUUSD)
 //  Indicateur de cassure de tendance pensé pour l'or en unité de temps M5.
 //
-//  Version de base / point de départ — la logique de détection sera affinée
-//  selon vos explications.
+//  Logique :
+//    - Swing = 3 bougies (1 de chaque côté du pivot central).
+//    - BoS (Break of Structure) haussier : clôture au-dessus du dernier swing high.
+//    - BoS baissier : clôture sous le dernier swing low.
+//    - Tendance CONFIRMÉE après 3 BoS consécutifs du même type (un BoS opposé
+//      remet le compteur à zéro pendant cette phase de construction).
+//    - Une fois la tendance confirmée, une SEULE cassure opposée suffit à
+//      provoquer un CHANGEMENT de tendance (CHoCH) : la tendance bascule.
 // =============================================================================
 indicator(title = "Trend Break M5 GOLD", shorttitle = "TB M5 GOLD", overlay = true)
 
@@ -14,9 +20,12 @@ indicator(title = "Trend Break M5 GOLD", shorttitle = "TB M5 GOLD", overlay = tr
 grpStruct = "Détection de structure"
 // Swing = 3 bougies : 1 bougie de chaque côté du sommet/creux central.
 swingLen  = input.int(1, title = "Bougies de chaque côté du swing", minval = 1, group = grpStruct, tooltip = "1 = swing de 3 bougies (1 à gauche, le pivot, 1 à droite). Augmente pour ne garder que des swings plus marqués.")
+confBos   = input.int(3, title = "BoS consécutifs pour confirmer", minval = 2, group = grpStruct, tooltip = "Nombre de cassures de structure consécutives nécessaires pour confirmer une nouvelle tendance de départ.")
 
 grpVisu  = "Affichage"
-showSig  = input.bool(true,  title = "Afficher les signaux", group = grpVisu)
+showBos   = input.bool(true, title = "Afficher les BoS",            group = grpVisu)
+showTrend = input.bool(true, title = "Afficher confirmations / changements", group = grpVisu)
+showBg    = input.bool(true, title = "Colorer le fond selon la tendance",    group = grpVisu)
 bullCol  = input.color(color.new(color.green, 0), title = "Couleur haussière", group = grpVisu)
 bearCol  = input.color(color.new(color.red, 0),   title = "Couleur baissière", group = grpVisu)
 
@@ -40,30 +49,95 @@ if not na(pl)
     lastLow := pl
 
 // =============================================================================
-//  CASSURE DE STRUCTURE (logique de base à affiner)
+//  CASSURE DE STRUCTURE (BoS)
 // =============================================================================
-// Cassure haussière : la clôture dépasse le dernier sommet confirmé.
-// Cassure baissière : la clôture passe sous le dernier creux confirmé.
+// crossover/crossunder ne se déclenchent qu'une fois par franchissement : un
+// nouveau BoS du même type exige donc qu'un nouveau swing se soit formé.
 breakUp   = not na(lastHigh) and ta.crossover(close, lastHigh)
 breakDown = not na(lastLow)  and ta.crossunder(close, lastLow)
 
 // =============================================================================
+//  MACHINE À ÉTATS : construction de tendance puis changement (CHoCH)
+// =============================================================================
+var int trend   = 0   // tendance confirmée : +1 haussière, -1 baissière, 0 aucune
+var int upCount = 0   // BoS haussiers consécutifs (phase de construction)
+var int dnCount = 0   // BoS baissiers consécutifs (phase de construction)
+
+// Événements émis sur la bougie courante.
+bool confirmUp   = false   // tendance haussière confirmée (3 BoS)
+bool confirmDown = false   // tendance baissière confirmée (3 BoS)
+bool changeUp    = false   // changement de tendance vers le haussier (CHoCH)
+bool changeDown  = false   // changement de tendance vers le baissier (CHoCH)
+
+if breakUp
+    if trend == 1
+        // Continuation de la tendance haussière déjà confirmée : rien à signaler.
+        upCount := 0
+        dnCount := 0
+    else if trend == -1
+        // Cassure opposée après une tendance baissière confirmée => CHoCH.
+        trend     := 1
+        changeUp  := true
+        upCount   := 0
+        dnCount   := 0
+    else
+        // Phase de construction : on compte les BoS haussiers consécutifs.
+        upCount += 1
+        dnCount := 0
+        if upCount >= confBos
+            trend     := 1
+            confirmUp := true
+            upCount   := 0
+
+if breakDown
+    if trend == -1
+        upCount := 0
+        dnCount := 0
+    else if trend == 1
+        trend      := -1
+        changeDown := true
+        upCount    := 0
+        dnCount    := 0
+    else
+        dnCount += 1
+        upCount := 0
+        if dnCount >= confBos
+            trend       := -1
+            confirmDown := true
+            dnCount     := 0
+
+// =============================================================================
 //  AFFICHAGE
 // =============================================================================
-plotshape(showSig and breakUp,   title = "Cassure haussière", style = shape.triangleup,   location = location.belowbar, color = bullCol, size = size.small, text = "BUY")
-plotshape(showSig and breakDown, title = "Cassure baissière", style = shape.triangledown, location = location.abovebar, color = bearCol, size = size.small, text = "SELL")
+// BoS « bruts » (petits triangles).
+plotshape(showBos and breakUp   and not confirmUp   and not changeUp,   title = "BoS haussier", style = shape.triangleup,   location = location.belowbar, color = color.new(bullCol, 35), size = size.tiny)
+plotshape(showBos and breakDown and not confirmDown and not changeDown, title = "BoS baissier", style = shape.triangledown, location = location.abovebar, color = color.new(bearCol, 35), size = size.tiny)
 
-// Visualisation des niveaux de structure suivis.
+// Confirmations de tendance (3 BoS).
+plotshape(showTrend and confirmUp,   title = "Tendance haussière confirmée", style = shape.labelup,   location = location.belowbar, color = bullCol, textcolor = color.white, text = "TREND ▲", size = size.small)
+plotshape(showTrend and confirmDown, title = "Tendance baissière confirmée", style = shape.labeldown, location = location.abovebar, color = bearCol, textcolor = color.white, text = "TREND ▼", size = size.small)
+
+// Changements de tendance (CHoCH, 1 cassure opposée).
+plotshape(showTrend and changeUp,   title = "Changement vers haussier", style = shape.labelup,   location = location.belowbar, color = bullCol, textcolor = color.white, text = "CHoCH ▲", size = size.small)
+plotshape(showTrend and changeDown, title = "Changement vers baissier", style = shape.labeldown, location = location.abovebar, color = bearCol, textcolor = color.white, text = "CHoCH ▼", size = size.small)
+
+// Niveaux de structure suivis.
 plot(lastHigh, title = "Dernier sommet", color = color.new(bearCol, 60), style = plot.style_linebr)
 plot(lastLow,  title = "Dernier creux",  color = color.new(bullCol, 60), style = plot.style_linebr)
+
+// Fond coloré selon la tendance confirmée.
+bgcolor(showBg and trend == 1  ? color.new(bullCol, 92) : na, title = "Fond haussier")
+bgcolor(showBg and trend == -1 ? color.new(bearCol, 92) : na, title = "Fond baissier")
 
 // =============================================================================
 //  ALERTES
 // =============================================================================
-alertcondition(breakUp,   title = "Cassure haussière", message = "Trend Break M5 GOLD : cassure HAUSSIÈRE")
-alertcondition(breakDown, title = "Cassure baissière", message = "Trend Break M5 GOLD : cassure BAISSIÈRE")
+alertcondition(confirmUp,   title = "Tendance haussière confirmée", message = "Trend Break M5 GOLD : tendance HAUSSIÈRE confirmée")
+alertcondition(confirmDown, title = "Tendance baissière confirmée", message = "Trend Break M5 GOLD : tendance BAISSIÈRE confirmée")
+alertcondition(changeUp,    title = "Changement vers haussier",     message = "Trend Break M5 GOLD : CHANGEMENT de tendance vers le HAUSSIER")
+alertcondition(changeDown,  title = "Changement vers baissier",     message = "Trend Break M5 GOLD : CHANGEMENT de tendance vers le BAISSIER")
 
-if useAlert and breakUp
-    alert("Trend Break M5 GOLD : cassure HAUSSIÈRE", alert.freq_once_per_bar_close)
-if useAlert and breakDown
-    alert("Trend Break M5 GOLD : cassure BAISSIÈRE", alert.freq_once_per_bar_close)
+if useAlert and (confirmUp or changeUp)
+    alert("Trend Break M5 GOLD : signal HAUSSIER (" + (confirmUp ? "tendance confirmée" : "changement de tendance") + ")", alert.freq_once_per_bar_close)
+if useAlert and (confirmDown or changeDown)
+    alert("Trend Break M5 GOLD : signal BAISSIER (" + (confirmDown ? "tendance confirmée" : "changement de tendance") + ")", alert.freq_once_per_bar_close)
