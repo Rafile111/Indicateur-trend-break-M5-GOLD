@@ -12,7 +12,8 @@ indicator(title = "Trend Break M5 GOLD", shorttitle = "TB M5 GOLD", overlay = tr
 //  PARAMÈTRES (inputs)
 // =============================================================================
 grpStruct = "Détection de structure"
-swingLen  = input.int(5, title = "Longueur des pivots (swing)", minval = 1, group = grpStruct, tooltip = "Nombre de bougies de chaque côté pour valider un sommet/creux.")
+// Swing = 3 bougies : 1 bougie de chaque côté du sommet/creux central.
+swingLen  = input.int(1, title = "Bougies de chaque côté du swing", minval = 1, group = grpStruct, tooltip = "1 = swing de 3 bougies (1 à gauche, le pivot, 1 à droite). Augmente pour ne garder que des swings plus marqués.")
 
 grpVisu  = "Affichage"
 showSig  = input.bool(true,  title = "Afficher les signaux", group = grpVisu)
