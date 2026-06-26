@@ -25,7 +25,6 @@ confBos   = input.int(3, title = "BoS consécutifs pour confirmer", minval = 2, 
 grpVisu  = "Affichage"
 showBos   = input.bool(true, title = "Afficher les BoS",            group = grpVisu)
 showTrend = input.bool(true, title = "Afficher confirmations / changements", group = grpVisu)
-showBg    = input.bool(true, title = "Colorer le fond selon la tendance",    group = grpVisu)
 bullCol  = input.color(color.new(color.green, 0), title = "Couleur haussière", group = grpVisu)
 bearCol  = input.color(color.new(color.red, 0),   title = "Couleur baissière", group = grpVisu)
 
@@ -120,14 +119,6 @@ plotshape(showTrend and confirmDown, title = "Tendance baissière confirmée", s
 // Changements de tendance (CHoCH, 1 cassure opposée).
 plotshape(showTrend and changeUp,   title = "Changement vers haussier", style = shape.labelup,   location = location.belowbar, color = bullCol, textcolor = color.white, text = "CHoCH ▲", size = size.small)
 plotshape(showTrend and changeDown, title = "Changement vers baissier", style = shape.labeldown, location = location.abovebar, color = bearCol, textcolor = color.white, text = "CHoCH ▼", size = size.small)
-
-// Niveaux de structure suivis.
-plot(lastHigh, title = "Dernier sommet", color = color.new(bearCol, 60), style = plot.style_linebr)
-plot(lastLow,  title = "Dernier creux",  color = color.new(bullCol, 60), style = plot.style_linebr)
-
-// Fond coloré selon la tendance confirmée.
-bgcolor(showBg and trend == 1  ? color.new(bullCol, 92) : na, title = "Fond haussier")
-bgcolor(showBg and trend == -1 ? color.new(bearCol, 92) : na, title = "Fond baissier")
 
 // =============================================================================
 //  ALERTES
