@@ -5,8 +5,10 @@
 //
 //  Logique :
 //    - Swing = 3 bougies (1 de chaque côté du pivot central).
-//    - BoS (Break of Structure) haussier : clôture au-dessus du dernier swing high.
-//    - BoS baissier : clôture sous le dernier swing low.
+//    - Leg = mouvement entre deux swings opposés ; on ne retient que son EXTRÊME
+//      (zigzag), ce qui élimine les petits swings internes non significatifs.
+//    - BoS (Break of Structure) haussier : clôture au-dessus de l'extrême haut de leg.
+//    - BoS baissier : clôture sous l'extrême bas de leg.
 //    - Tendance CONFIRMÉE après 3 BoS consécutifs du même type (un BoS opposé
 //      remet le compteur à zéro pendant cette phase de construction).
 //    - Une fois la tendance confirmée, une SEULE cassure opposée suffit à
@@ -33,33 +35,66 @@ grpAlert = "Alertes"
 useAlert = input.bool(true, title = "Activer les alertes", group = grpAlert)
 
 // =============================================================================
-//  DÉTECTION DES PIVOTS (swing highs / swing lows)
+//  DÉTECTION DES SWINGS ET CONSTRUCTION DES LEGS (zigzag)
 // =============================================================================
 // pivothigh/pivotlow renvoient une valeur confirmée 'swingLen' bougies plus tard.
 ph = ta.pivothigh(high, swingLen, swingLen)
 pl = ta.pivotlow(low,  swingLen, swingLen)
+pivotBar = bar_index - swingLen   // bougie réelle du pivot
 
-// On mémorise le dernier sommet et le dernier creux confirmés.
-var float lastHigh = na
-var float lastLow  = na
+// Zigzag : on ne conserve que l'EXTRÊME de chaque leg (structure pure).
+//   zdir  = type du dernier swing validé (+1 = high, -1 = low)
+//   zHigh = sommet de la dernière leg montante   (référence d'un BoS haussier)
+//   zLow  = creux  de la dernière leg descendante (référence d'un BoS baissier)
+var int   zdir  = 0
+var float zHigh = na
+var float zLow  = na
 
-// Lignes de structure : une ligne part du swing et est prolongée vers la droite
-// tant que le prix ne l'a pas touchée ; une fois touchée, elle est figée.
+bool newHigh = false   // nouvel extrême haut de leg (créé ou rehaussé)
+bool newLow  = false   // nouvel extrême bas de leg  (créé ou abaissé)
+
+if not na(ph)
+    if zdir == 1
+        // Toujours dans la même leg montante : on ne garde que le point le plus haut.
+        if ph > zHigh
+            zHigh   := ph
+            newHigh := true
+    else
+        // La leg descendante se termine, une leg montante commence.
+        zHigh   := ph
+        zdir    := 1
+        newHigh := true
+if not na(pl)
+    if zdir == -1
+        // Toujours dans la même leg descendante : on ne garde que le point le plus bas.
+        if pl < zLow
+            zLow   := pl
+            newLow := true
+    else
+        zLow   := pl
+        zdir   := -1
+        newLow := true
+
+// Références de cassure = extrêmes de leg courants (et non plus les mini-pivots).
+lastHigh = zHigh
+lastLow  = zLow
+
+// =============================================================================
+//  LIGNES DE STRUCTURE
+// =============================================================================
+// Une ligne part de l'extrême de leg et se prolonge tant que le prix ne l'a pas
+// touchée ; une fois touchée, elle est figée et passée en trait plein.
 var line hiLine    = na
 var bool hiTouched = false
 var line loLine    = na
 var bool loTouched = false
 
-if not na(ph)
-    lastHigh := ph
-    if showLines
-        hiLine    := line.new(bar_index - swingLen, ph, bar_index, ph, color = color.new(bearCol, 20), width = 1, style = line.style_dashed)
-        hiTouched := false
-if not na(pl)
-    lastLow := pl
-    if showLines
-        loLine    := line.new(bar_index - swingLen, pl, bar_index, pl, color = color.new(bullCol, 20), width = 1, style = line.style_dashed)
-        loTouched := false
+if newHigh and showLines
+    hiLine    := line.new(pivotBar, zHigh, bar_index, zHigh, color = color.new(bearCol, 20), width = 1, style = line.style_dashed)
+    hiTouched := false
+if newLow and showLines
+    loLine    := line.new(pivotBar, zLow, bar_index, zLow, color = color.new(bullCol, 20), width = 1, style = line.style_dashed)
+    loTouched := false
 
 // Prolongation jusqu'au contact, puis figée et passée en trait plein.
 if not na(hiLine) and not hiTouched
