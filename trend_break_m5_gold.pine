@@ -1,0 +1,68 @@
+//@version=6
+// =============================================================================
+//  Trend Break - M5 GOLD (XAUUSD)
+//  Indicateur de cassure de tendance pensé pour l'or en unité de temps M5.
+//
+//  Version de base / point de départ — la logique de détection sera affinée
+//  selon vos explications.
+// =============================================================================
+indicator(title = "Trend Break M5 GOLD", shorttitle = "TB M5 GOLD", overlay = true)
+
+// =============================================================================
+//  PARAMÈTRES (inputs)
+// =============================================================================
+grpStruct = "Détection de structure"
+swingLen  = input.int(5, title = "Longueur des pivots (swing)", minval = 1, group = grpStruct, tooltip = "Nombre de bougies de chaque côté pour valider un sommet/creux.")
+
+grpVisu  = "Affichage"
+showSig  = input.bool(true,  title = "Afficher les signaux", group = grpVisu)
+bullCol  = input.color(color.new(color.green, 0), title = "Couleur haussière", group = grpVisu)
+bearCol  = input.color(color.new(color.red, 0),   title = "Couleur baissière", group = grpVisu)
+
+grpAlert = "Alertes"
+useAlert = input.bool(true, title = "Activer les alertes", group = grpAlert)
+
+// =============================================================================
+//  DÉTECTION DES PIVOTS (swing highs / swing lows)
+// =============================================================================
+// pivothigh/pivotlow renvoient une valeur confirmée 'swingLen' bougies plus tard.
+ph = ta.pivothigh(high, swingLen, swingLen)
+pl = ta.pivotlow(low,  swingLen, swingLen)
+
+// On mémorise le dernier sommet et le dernier creux confirmés.
+var float lastHigh = na
+var float lastLow  = na
+
+if not na(ph)
+    lastHigh := ph
+if not na(pl)
+    lastLow := pl
+
+// =============================================================================
+//  CASSURE DE STRUCTURE (logique de base à affiner)
+// =============================================================================
+// Cassure haussière : la clôture dépasse le dernier sommet confirmé.
+// Cassure baissière : la clôture passe sous le dernier creux confirmé.
+breakUp   = not na(lastHigh) and ta.crossover(close, lastHigh)
+breakDown = not na(lastLow)  and ta.crossunder(close, lastLow)
+
+// =============================================================================
+//  AFFICHAGE
+// =============================================================================
+plotshape(showSig and breakUp,   title = "Cassure haussière", style = shape.triangleup,   location = location.belowbar, color = bullCol, size = size.small, text = "BUY")
+plotshape(showSig and breakDown, title = "Cassure baissière", style = shape.triangledown, location = location.abovebar, color = bearCol, size = size.small, text = "SELL")
+
+// Visualisation des niveaux de structure suivis.
+plot(lastHigh, title = "Dernier sommet", color = color.new(bearCol, 60), style = plot.style_linebr)
+plot(lastLow,  title = "Dernier creux",  color = color.new(bullCol, 60), style = plot.style_linebr)
+
+// =============================================================================
+//  ALERTES
+// =============================================================================
+alertcondition(breakUp,   title = "Cassure haussière", message = "Trend Break M5 GOLD : cassure HAUSSIÈRE")
+alertcondition(breakDown, title = "Cassure baissière", message = "Trend Break M5 GOLD : cassure BAISSIÈRE")
+
+if useAlert and breakUp
+    alert("Trend Break M5 GOLD : cassure HAUSSIÈRE", alert.freq_once_per_bar_close)
+if useAlert and breakDown
+    alert("Trend Break M5 GOLD : cassure BAISSIÈRE", alert.freq_once_per_bar_close)
